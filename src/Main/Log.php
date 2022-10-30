@@ -124,7 +124,7 @@ class Log
         if (count($arr)) {
             foreach ($arr as $key => $value) {
                 $newDir .= $value . DS;
-                if (stripos($newDir, ROOT_PATH) !== false && !is_dir($newDir)) {
+                if (stripos($newDir, dirname(dirname(__DIR__))) !== false && !is_dir($newDir)) {
                     mkdir($newDir, 0755);
                 }
             }
