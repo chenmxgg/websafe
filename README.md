@@ -22,7 +22,7 @@ composer require chenm/websafe
 ```
 ## 自定义配置
 
-在配置文件下，可自定义修改配置，包括防御规则、开关、提示模板、白名单等
+在src/Main/Config配置文件中，你可以自定义修改配置，包括防御规则、开关、提示模板、白名单等
 ```php
 
 namespace Chenm\websafe\Main;
