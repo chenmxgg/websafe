@@ -20,3 +20,90 @@ QQ：857285711
 cd "自己的项目路径"
 composer require chenm/websafe
 ```
+## 自定义配置
+
+在配置文件下，可自定义修改配置，包括防御规则、开关、提示模板、白名单等
+```php
+
+namespace Chenm\websafe\Main;
+
+/**
+ * web 配置文件
+ */
+class Config
+{
+    /**
+     * 基础数据检测配置
+     *
+     * @var array
+     */
+    protected $config = [
+        'GET'     => [
+            //开关
+            'open'  => true,
+            //日志级别
+            'level' => 3,
+        ],
+        'POST'    => [
+            'open'  => true,
+            'level' => 3,
+        ],
+        'COOKIE'  => [
+            'open'  => true,
+            'level' => 2,
+        ],
+        'SESSION' => [
+            'open'  => true,
+            'level' => 2,
+        ],
+        'SERVER'  => [
+            'open'  => true,
+            'level' => 1,
+        ],
+
+    ];
+
+    /**
+     * 扩展检测配置
+     *
+     * @var array
+     */
+    protected $config_extends = [
+        'XSS' => [
+            'open'  => true,
+            'level' => 1,
+        ],
+
+    ];
+
+    /**
+     * url白名单正则模式 通过匹配 $_SERVER['REQUEST_URI'] 来验证
+     * 此处默认的白名单以TP6框架后台路径为例 可自行修改
+     * @var array
+     */
+    protected $white = [
+        'GET'     => [
+            //
+            '^\/[a-zA-Z0-9\-]+\.php\/(.*?)$',
+        ],
+        'POST'    => [
+            '^\/[a-zA-Z0-9\-]+\.php\/(.*?)$',
+        ],
+        'COOKIE'  => [
+            '^\/[a-zA-Z0-9\-]+\.php\/(.*?)$',
+        ],
+        'SESSION' => [
+            '^\/[a-zA-Z0-9\-]+\.php\/(.*?)$',
+        ],
+        'SERVER'  => [
+            '^\/[a-zA-Z0-9\-]+\.php\/(.*?)$',
+        ],
+    ];
+
+    /**
+     * 安全拦截提示模板
+     *
+     * @var array
+     */
+    protected $tpl = 'DefaultTpl';
+```
