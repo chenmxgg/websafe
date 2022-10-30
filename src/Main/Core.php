@@ -135,7 +135,7 @@ class Core extends Config
     {
         foreach ($keys as $key => $value) {
 
-            if (!preg_match($rule, $value, $match)) {
+            if (preg_match($rule, $value, $match)) {
                 $this->handleCall([
                     'data'    => [
                         'Uri'   => $this->getFillerUri(),
@@ -150,13 +150,13 @@ class Core extends Config
         }
 
         foreach ($values as $key2 => $value2) {
-            if (!preg_match($rule, $value2, $match)) {
+            if (preg_match($rule, $value2, $match2)) {
                 $this->handleCall([
                     'data'    => [
                         'Uri'   => $this->getFillerUri(),
                         'Rule'  => $rule,
-                        'Value' => $value,
-                        'Match' => $match,
+                        'Value' => $value2,
+                        'Match' => $match2,
                     ],
                     'config'  => $config,
                     'message' => '检测到非法字符，已被系统拦截！',
@@ -176,7 +176,7 @@ class Core extends Config
         //记录日志
         $type    = isset($data['config'][0]) && $data['config'][0] ? $data['config'][0] : 'unknown';
         $level   = isset($data['config'][1]) && isset($data['config'][1]['level']) ? $data['config'][1]['level'] : 0;
-        $logData = '类型 [ ' . $type . ' ] 链接 [ ' . $data['data']['Uri'] . ' ] 规则 [' . $data['data']['Rule'] . '] 触发词 [' . $data['data']['Match'][0] . '] ';
+        $logData = '类型 [ ' . $type . ' ] 链接 [ ' . $data['data']['Uri'] . ' ] 规则 [' . $data['data']['Rule'] . ']  触发内容 [' . $data['data']['Value'] . ']  触发词 [' . $data['data']['Match'][0] . '] ';
         switch ($level) {
             //普通级别
             case 1:
