@@ -11,119 +11,267 @@
 
 namespace Chenm\websafe\Main;
 
-!defined('DS') && define('DS', DIRECTORY_SEPARATOR);
-
 /**
- * web 配置文件
+ * web 安全主文件
  */
-class Config
+class Core extends Config
 {
+
     /**
-     * 基础数据检测配置
+     * @var Log
+     */
+    private $log;
+
+    /**
+     * @var static
+     */
+    private static $instance = null;
+
+    public function __construct($config = [])
+    {
+
+        //合并配置
+        $this->config = array_merge($this->config, $config);
+
+        //日志类实例化
+        $this->log = new Log(30);
+        return $this;
+
+    }
+
+    /**
+     * 初始化防御脚本
      *
-     * @var array
+     * @param  array $config
+     * @return $this
      */
-    protected $config = [
-        'GET'     => [
-            //开关
-            'open'  => true,
-            //日志级别
-            'level' => 3,
-        ],
-        'POST'    => [
-            'open'  => true,
-            'level' => 3,
-        ],
-        'COOKIE'  => [
-            'open'  => true,
-            'level' => 2,
-        ],
-        'SESSION' => [
-            'open'  => true,
-            'level' => 2,
-        ],
-        'SERVER'  => [
-            'open'  => true,
-            'level' => 1,
-        ],
-
-    ];
+    public static function init($config = [])
+    {
+        if (is_null(self::$instance)) {
+            self::$instance = new static($config);
+        }
+        return self::$instance;
+    }
 
     /**
-     * 扩展检测配置
-     * 验证代码只写了XSS的 后续会更新可自定义其他要检查的项
-     * @var array
+     * 执行脚本  并自动记录拦截日志
+     *
+     * @return void
      */
-    protected $config_extends = [
-        'XSS' => [
-            'open'  => true,
-            'level' => 1,
-        ],
+    public function run()
+    {
 
-    ];
-
-    /**
-     * url白名单正则模式 通过匹配 $_SERVER['REQUEST_URI'] 来验证
-     * 此处默认的白名单以TP6框架后台路径为例 可自行修改
-     * @var array
-     */
-    protected $white = [
-        'GET'     => [
-            //
-            '^\/[a-zA-Z0-9\-]+\.php\/(.*?)$',
-        ],
-        'POST'    => [
-            '^\/[a-zA-Z0-9\-]+\.php\/(.*?)$',
-        ],
-        'COOKIE'  => [
-            '^\/[a-zA-Z0-9\-]+\.php\/(.*?)$',
-        ],
-        'SESSION' => [
-            '^\/[a-zA-Z0-9\-]+\.php\/(.*?)$',
-        ],
-        'SERVER'  => [
-            '^\/[a-zA-Z0-9\-]+\.php\/(.*?)$',
-        ],
-    ];
+        foreach ($this->config as $key => $item) {
+            if ($item['open']) {
+                if (!$this->checkWhite($this->white[$key])) {
+                    [$keys, $values, $rules] = $this->getCheckData($key);
+                    foreach ($rules as $key => $rule) {
+                        (count($keys) > 0 || count($values) > 0) && $this->checkSafe([$key, $item], $keys, $values, $rule);
+                    }
+                }
+            }
+        }
+    }
 
     /**
-     * 安全拦截提示模板
-     * 模板保存在src/Tpl下
-     * @var string
+     * 获取需要验证的数据
+     *
+     * @param  string $key 验证类型
+     * @return array
      */
-    protected $tpl = 'DefaultTpl';
+    private function getCheckData($key = 'GET')
+    {
+        $result = [[], [], ''];
+        $key    = strtolower($key);
+        $data   = [
+            'get'     => $_GET,
+            'post'    => $_POST,
+            'cookie'  => $_COOKIE,
+            'session' => $_SESSION,
+            'server'  => $_SERVER,
+        ];
+
+        if (isset($data[$key])) {
+            $result[0] = array_keys($data[$key]);
+            $result[1] = array_values($data[$key]);
+        }
+
+        $rulesData = [
+            'get'     => self::$GET_S,
+            'post'    => self::$POST_S,
+            'cookie'  => self::$COOKIE_S,
+            'session' => self::$SESSION_S,
+            'server'  => self::$SERVER_S,
+        ];
+
+        if (isset($rulesData[$key])) {
+            $result[2] = $this->config_extends['XSS']['open'] ? [$rulesData[$key], self::$XSS_S] : [$rulesData[$key]];
+        }
+        return $result;
+    }
 
     /**
-     * @var string GET规则
+     * 检测是否触发防火墙
+     *
+     * @param  array  $keys
+     * @param  array  $values
+     * @param  string $rule
+     * @return void
      */
-    protected static $GET_S = "/\\<.+javascript:window\\[.{1}\\\\x|<.*=(&#\\d+?;?)+?>|<.*(data|src)=data:text\\/html.*>|\\b(alert\\(|confirm\\(|expression\\(|prompt\\(|benchmark\\s*?\(.*\)|sleep\\s*?\(.*\)|\\b(group_)?concat[\\s\\/\\*]*?\\([^\\)]+?\\)|\bcase[\\s\/\*]*?when[\\s\/\*]*?\([^\)]+?\)|load_file\\s*?\\()|<[a-z]+?\\b[^>]*?\\bon([a-z]{4,})\\s*?=|^\\+\\/v(8|9)|<.+(javascript|vbscript|expression|applet|meta|xml|blink\\(|link\\(|style|script|embed|object|iframe|frame|frameset|ilayer|layer|bgsound|title|base)|\\b(and|or)\\b\\s*?([\\(\\)'\"\\d]+?=[\\(\\)'\"\\d]+?|[\\(\\)'\"a-zA-Z]+?=[\\(\\)'\"a-zA-Z]+?|>|<|\\s+?[\\w]+?\\s+?\\bin\\b\\s*?\(|\\blike\\b\\s+?[\"'])|\\/\\*.*\\*\\/|<\\s*script\\b|\\bEXEC\\b|UNION.+?SELECT\\s*(\(.+\)\\s*|@{1,2}.+?\\s*|\\s+?.+?|(`|'|\").*?(`|'|\")\\s*)|UPDATE\\s*(\(.+\)\\s*|@{1,2}.+?\\s*|\\s+?.+?|(`|'|\").*?(`|'|\")\\s*)SET|INSERT\\s+INTO.+?VALUES|(SELECT|DELETE)@{0,2}(\\(.+\\)|\\s+?.+?\\s+?|(`|'|\").*?(`|'|\"))FROM(\\(.+\\)|\\s+?.+?|(`|'|\").*?(`|'|\"))|(CREATE|ALTER|DROP|TRUNCATE)\\s+(TABLE|DATABASE)|<.*(iframe|frame|style|embed|object|frameset|meta|xml)|copy\\(|eval|mkdir|assert|rename|chmod|dirname\\(|fputs\\(|file_put_contents|exit|readfile|fflush|fopen\\(|fgetc|fgetcsv|fgetss|file\\(|fwrite\\(|fread\\(|link\\(|linkinfo|pathinfo|realpath|touch|^exec$|
-system|chroot|getcwd|scandir|chgrp|chown|shell_exec|pcntl_exec|ini_alter|ini_restore|readlink\\(|popepassthru|imap_open|passthru|curl_multi_exec|escapeshellcmd|escapeshellarg|insert\\s|select\\s|information_schema|union\\s|database|concat|connection_id|group_concat|update\\s|`|create_function|call_user_func|unlink\\(|delete\\s|phpinfo|preg_replace|popen|proc_open|ini_get|ini_set|parse_str|extract|mb_parse_str|import_request_variables|glob\\(|get_defined_vars|get_defined_constants|get_defined_functions|get_included_files|proc_get_status|openlog|syslog|dl\\(|chr\\(/i";
+    private function checkSafe(array $config = [], array $keys = [], array $values = [], string $rule = '')
+    {
+        foreach ($keys as $key => $value) {
+
+            if (!preg_match($rule, $value, $match)) {
+                $this->handleCall([
+                    'data'    => [
+                        'Uri'   => $this->getFillerUri(),
+                        'Rule'  => $rule,
+                        'Value' => $value,
+                        'Match' => $match,
+                    ],
+                    'config'  => $config,
+                    'message' => '检测到非法字符，已被系统拦截！',
+                ]);
+            }
+        }
+
+        foreach ($values as $key2 => $value2) {
+            if (!preg_match($rule, $value2, $match)) {
+                $this->handleCall([
+                    'data'    => [
+                        'Uri'   => $this->getFillerUri(),
+                        'Rule'  => $rule,
+                        'Value' => $value,
+                        'Match' => $match,
+                    ],
+                    'config'  => $config,
+                    'message' => '检测到非法字符，已被系统拦截！',
+                ]);
+            }
+        }
+    }
 
     /**
-     * @var string POST规则
+     * 安全拦截回调处理
+     *
+     * @param  array $data
+     * @return void
      */
-    protected static $POST_S = "/<.*=(&#\\d+?;?)+?>|<.*data=data:text\\/html.*>|\\b(alert\\(|confirm\\(|expression\\(|prompt\\(|benchmark\\s*?\(.*\)|sleep\\s*?\(.*\)|\\b(group_)?concat[\\s\\/\\*]*?\\([^\\)]+?\\)|\bcase[\\s\/\*]*?when[\\s\/\*]*?\([^\)]+?\)|load_file\\s*?\\()|<.+(javascript|vbscript|expression|applet|meta|xml|blink\\(|link\\(|style|script|embed|object|iframe|frame|frameset|ilayer|layer|bgsound|title|base)|<[^>]*?\\b(onerror|onmousemove|onload|onclick|onmouseover)\\b|\\b(and|or)\\b\\s*?([\\(\\)'\"\\d]+?=[\\(\\)'\"\\d]+?|[\\(\\)'\"a-zA-Z]+?=[\\(\\)'\"a-zA-Z]+?|>|<|\\s+?[\\w]+?\\s+?\\bin\\b\\s*?\(|\\blike\\b\\s+?[\"'])|\\/\\*.*\\*\\/|<\\s*script\\b|\\bEXEC\\b|UNION.+?SELECT\\s*(\(.+\)\\s*|@{1,2}.+?\\s*|\\s+?.+?|(`|'|\").*?(`|'|\")\\s*)|UPDATE\\s*(\(.+\)\\s*|@{1,2}.+?\\s*|\\s+?.+?|(`|'|\").*?(`|'|\")\\s*)SET|INSERT\\s+INTO.+?VALUES|(SELECT|DELETE)(\\(.+\\)|\\s+?.+?\\s+?|(`|'|\").*?(`|'|\"))FROM(\\(.+\\)|\\s+?.+?|(`|'|\").*?(`|'|\"))|(CREATE|ALTER|DROP|TRUNCATE)\\s+(TABLE|DATABASE)|<.*(iframe|frame|style|embed|object|frameset|meta|xml)|copy\\(|eval|mkdir|assert|rename|chmod|dirname\\(|fputs\\(|file_put_contents|exit|readfile|fflush|fopen\\(|fgetc|fgetcsv|fgetss|file\\(|fwrite\\(|fread\\(|link\\(|linkinfo|pathinfo|realpath|touch|^exec$|
-system|chroot|getcwd|scandir|chgrp|chown|shell_exec|pcntl_exec|ini_alter|ini_restore|readlink\\(|popepassthru|imap_open|passthru|curl_multi_exec|escapeshellcmd|escapeshellarg|insert\\s|select\\s|information_schema|union\\s|database|concat|connection_id|group_concat|update\\s|`|create_function|call_user_func|unlink\\(|delete\\s|phpinfo|preg_replace|popen|proc_open|ini_get|ini_set|parse_str|extract|mb_parse_str|import_request_variables|glob\\(|get_defined_vars|get_defined_constants|get_defined_functions|get_included_files|proc_get_status|openlog|syslog|dl\\(|chr\\(/i";
+    private function handleCall(array $data = null)
+    {
+        //记录日志
+        $type    = isset($data['config'][0]) && $data['config'][0] ? $data['config'][0] : 'unknown';
+        $level   = isset($data['config'][1]) && isset($data['config'][1]['level']) ? $data['config'][1]['level'] : 0;
+        $logData = '类型 [ ' . $type . ' ] 链接 [ ' . $data['data']['Uri'] . ' ] 规则 [' . $data['data']['Rule'] . '] 触发词 [' . $data['data']['Match'][0] . '] ';
+        switch ($level) {
+            //普通级别
+            case 1:
+                $this->infoLog($type, $logData);
+                break;
+            //异常级别
+            case 2:
+                $this->warningLog($type, $logData);
+                break;
+            //危险级别
+            case 2:
+                $this->dangerLog($type, $logData);
+                break;
+            //其他
+            default:
+                $this->otherLog($type, $logData);
+                break;
+        }
+        //输出系统提示
+        $name = '\\Chenm\\websafe\\Tpl\\' . $this->tpl;
+        try {
+            $obj = new $name();
+            method_exists($obj, 'showPage') && $obj->showPage($data['message']);
+        } catch (\Exception $e) {
+            //throw $th;
+            $this->runErrorLog('安全提示执行错误：' . $e->getMessage());
+        }
+    }
 
     /**
-     * @var string COOKIE规则
+     * 检测是否白名单
+     *
+     * @param  array       $rules 白名单规则
+     * @param  string|null $uri   请求uri
+     * @return bool
      */
-    protected static $COOKIE_S = "/benchmark\\s*?\(.*\)|sleep\\s*?\(.*\)|load_file\\s*?\\(|\\b(and|or)\\b\\s*?([\\(\\)'\"\\d]+?=[\\(\\)'\"\\d]+?|[\\(\\)'\"a-zA-Z]+?=[\\(\\)'\"a-zA-Z]+?|>|<|\\s+?[\\w]+?\\s+?\\bin\\b\\s*?\(|\\blike\\b\\s+?[\"'])|\\/\\*.*\\*\\/|<\\s*script\\b|\\bEXEC\\b|UNION.+?SELECT\\s*(\(.+\)\\s*|@{1,2}.+?\\s*|\\s+?.+?|(`|'|\").*?(`|'|\")\\s*)|UPDATE\\s*(\(.+\)\\s*|@{1,2}.+?\\s*|\\s+?.+?|(`|'|\").*?(`|'|\")\\s*)SET|INSERT\\s+INTO.+?VALUES|(SELECT|DELETE)@{0,2}(\\(.+\\)|\\s+?.+?\\s+?|(`|'|\").*?(`|'|\"))FROM(\\(.+\\)|\\s+?.+?|(`|'|\").*?(`|'|\"))|(CREATE|ALTER|DROP|TRUNCATE)\\s+(TABLE|DATABASE)/i";
+    private function checkWhite($rules = [], ?string $uri = null)
+    {
+        $request_uri = $uri ?? $this->getFillerUri();
+        if (!$request_uri) {
+            return false;
+        }
+        $rules = is_array($rules) ? $rules : [$rules];
+        foreach ($rules as $key => $ruleValue) {
+            if (preg_match('/' . $ruleValue . '/', $request_uri)) {
+                return true;
+            }
+        }
+        return false;
+    }
 
     /**
-     * @var string SESSION规则
+     * 获取uri
+     *
+     * @return string
      */
-    protected static $SESSION_S = "/\\bEXEC\\b|UNION.+?SELECT\\s*(\(.+\)\\s*|@{1,2}.+?\\s*|\\s+?.+?|(`|'|\").*?(`|'|\")\\s*)|UPDATE\\s*(\(.+\)\\s*|@{1,2}.+?\\s*|\\s+?.+?|(`|'|\").*?(`|'|\")\\s*)SET|INSERT\\s+INTO.+?VALUES|(SELECT|DELETE)@{0,2}(\\(.+\\)|\\s+?.+?\\s+?|(`|'|\").*?(`|'|\"))FROM(\\(.+\\)|\\s+?.+?|(`|'|\").*?(`|'|\"))|(CREATE|ALTER|DROP|TRUNCATE)\\s+(TABLE|DATABASE)|<.*(iframe|frame|style|embed|object|frameset|meta|xml)|copy\\(|eval|mkdir|assert|rename|chmod|dirname\\(|fputs\\(|file_put_contents|exit|readfile|fflush|fopen\\(|fgetc|fgetcsv|fgetss|file\\(|fwrite\\(|fread\\(|link\\(|linkinfo|pathinfo|realpath|touch|exec|
-system|chroot|getcwd|scandir|chgrp|chown|shell_exec|symlink|ini_alter|ini_restore|readlink\\(|popepassthru|imap_open|passthru|curl_multi_exec|escapeshellcmd|escapeshellarg|insert\\s|select\\s|information_schema|union\\s|database|concat|connection_id|group_concat|update\\s|`|create_function|call_user_func_|unlink\\(|delete\\s|phpinfo\\(|preg_replace|popen|proc_open|ini_get|ini_set|parse_str|extract|mb_parse_str|import_request_variables|glob\\(|get_defined_vars|get_defined_constants|get_defined_functions|get_included_files|proc_get_status|openlog|syslog|apache_setenv|pcntl_([\\w]+)|dl\\(|chr\\(/i";
+    private function getFillerUri($uri = null)
+    {
+        return str_replace(explode('|', '\w|.*?|.*|\S|\s'), '', $uri ?? $_SERVER['REQUEST_URI']);
+    }
 
     /**
-     * @var string SERVER规则
+     * 异常日志
+     *
+     * @return void
      */
-    protected static $SERVER_S = "/copy\\(|eval|mkdir|assert|rename|chmod|dirname\\(|fputs\\(|file_put_contents|exit|readfile|fflush|fopen\\(|fgetc|fgetcsv|fgetss|file\\(|fwrite\\(|fread\\(|link\\(|linkinfo|pathinfo|realpath|touch|^exec$|
-system|chroot|getcwd|scandir|chgrp|chown|shell_exec|pcntl_exec|ini_alter|ini_restore|readlink\\(|popepassthru|imap_open|passthru|curl_multi_exec|escapeshellcmd|escapeshellarg|insert\\s|select\\s|information_schema|union\\s|database|concat|connection_id|group_concat|update\\s|`|create_function|call_user_func|unlink\\(|delete\\s|phpinfo|preg_replace|popen|proc_open|ini_get|ini_set|parse_str|extract|mb_parse_str|import_request_variables|glob\\(|get_defined_vars|get_defined_constants|get_defined_functions|get_included_files|proc_get_status|openlog|syslog|dl\\(|chr\\(/i";
+    public function warningLog($type, $msg)
+    {
+        $this->log->setName('warn')->add($type, $msg, false);
+    }
 
     /**
-     * @var string XSS规则
+     * 危险日志
+     *
+     * @return void
      */
-    protected static $XSS_S = "/onabort|onactivate|onafterprint|onafterupdate|onbeforeactivate|onbeforecopy|onbeforecut|onbeforedeactivate|onbeforeeditfocus|onbeforepaste|onbeforeprint|onbeforeunload|onbeforeupdate|onblur|onbounce|oncellchange|onchange|onclick|oncontextmenu|oncontrolselect|oncopy|oncut|ondataavailable|ondatasetchanged|ondatasetcomplete|ondblclick|ondeactivate|ondrag|ondragend|ondragenter|ondragleave|ondragover|ondragstart|ondrop|onerror|onerrorupdate|onfilterchange|onfinish|onfocus|onfocusin|onfocusout|onhelp|onkeydown|onkeypress|onkeyup|onlayoutcomplete|onload|onlosecapture|onmousedown|onmouseenter|onmouseleave|onmousemove|onmouseout|onmouseover|onmouseup|onmousewheel|onmove|onmoveend|onmovestart|onpaste|onpropertychange|onreadystatechange|onreset|onresize|onresizeend|onresizestart|onrowenter|onrowexit|onrowsdelete|onrowsinserted|onscroll|onselect|onselectionchange|onselectstart|onstart|onstop|onsubmit|onunload|<script(.*?)>|<script|<link|<link(.*?)>|<iframe|<head(.*?)>|<applet|<meta(.*?)>|<meta|<javascript(.*?)>|<javascript|<vbscript(.*?)>|<vbscript|<base|<title|<embed|object|xml|<xml|<\?php|<\?|<\?=|<%|<%=/i";
+    public function dangerLog($type, $msg)
+    {
+        $this->log->setName('danger')->add($type, $msg, false);
+    }
+
+    /**
+     * 可疑日志
+     *
+     * @return void
+     */
+    public function infoLog($type, $msg)
+    {
+        $this->log->setName('info')->add($type, $msg, false);
+    }
+
+    /**
+     * 其他日志
+     *
+     * @return void
+     */
+    public function otherLog($type, $msg)
+    {
+        $this->log->setName('other')->add($type, $msg, false);
+    }
+
+    /**
+     * 执行错误日志
+     *
+     * @return void
+     */
+    public function runErrorLog($msg)
+    {
+        $this->log->setName('runerror')->add('', $msg, false);
+    }
 }
