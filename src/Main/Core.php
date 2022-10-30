@@ -54,12 +54,25 @@ class Core extends Config
     }
 
     /**
+     * 判断当前的运行环境是否是cli模式
+     *
+     * @return bool
+     */
+    public function isCli()
+    {
+        return preg_match("/cli/i", php_sapi_name()) ? true : false;
+    }
+
+    /**
      * 执行脚本  并自动记录拦截日志
      *
      * @return void
      */
     public function run()
     {
+        if ($this->isCli()) {
+            return;
+        }
 
         foreach ($this->config as $key => $item) {
             if ($item['open']) {
