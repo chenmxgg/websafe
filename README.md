@@ -101,9 +101,9 @@ class Config
     ];
 
     /**
-     * 安全拦截提示模板
-     *
-     * @var array
+     * 安全拦截提示模板  
+     * 模板保存在在src/Tpl下
+     * @var string
      */
     protected $tpl = 'DefaultTpl';
 ```
