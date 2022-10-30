@@ -1,7 +1,7 @@
 <?php
 /*
  * @Author: 沉梦 chenmxgg@163.com <blog.achaci.cn>
- * @Date: 2022-08-13 15:41:41
+ * @Date: 2022-10-29 15:41:41
  * @LastEditors: 沉梦 chenmxgg@163.com <blog.achaci.cn>
  * @LastEditTime: 2022-10-22 22:10:23
  * @Description:
@@ -10,8 +10,6 @@
  */
 
 namespace Chenm\websafe\Main;
-
-!defined('DS') && define('DS', DIRECTORY_SEPARATOR);
 
 /**
  * web 配置文件
