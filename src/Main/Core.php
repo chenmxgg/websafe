@@ -3,7 +3,7 @@
  * @Author: 沉梦 chenmxgg@163.com <blog.achaci.cn>
  * @Date: 2022-10-29 15:41:41
  * @LastEditors: 沉梦 chenmxgg@163.com <blog.achaci.cn>
- * @LastEditTime: 2022-10-22 22:10:23
+ * @LastEditTime: 2022-11-04 22:05:47
  * @Description:
  *
  * Copyright (c) 2022 by 成都沉梦科技, All Rights Reserved.
@@ -64,29 +64,6 @@ class Core extends Config
     }
 
     /**
-     * 执行脚本  并自动记录拦截日志
-     *
-     * @return void
-     */
-    public function run()
-    {
-        if ($this->isCli()) {
-            return;
-        }
-
-        foreach ($this->config as $key => $item) {
-            if ($item['open']) {
-                if (!$this->checkWhite($this->white[$key])) {
-                    [$keys, $values, $rules] = $this->getCheckData($key);
-                    foreach ($rules as $key => $rule) {
-                        (count($keys) > 0 || count($values) > 0) && $this->checkSafe([$key, $item], $keys, $values, $rule);
-                    }
-                }
-            }
-        }
-    }
-
-    /**
      * 获取需要验证的数据
      *
      * @param  string $key 验证类型
@@ -124,6 +101,29 @@ class Core extends Config
     }
 
     /**
+     * 执行脚本  并自动记录拦截日志
+     *
+     * @return void
+     */
+    public function run()
+    {
+        if ($this->isCli()) {
+            return;
+        }
+
+        foreach ($this->config as $key => $item) {
+            if ($item['open']) {
+                if (!$this->checkWhite($this->white[$key])) {
+                    [$keys, $values, $rules] = $this->getCheckData($key);
+                    foreach ($rules as $key => $rule) {
+                        (count($keys) > 0 || count($values) > 0) && $this->checkSafe([$key, $item], $keys, $values, $rule);
+                    }
+                }
+            }
+        }
+    }
+
+    /**
      * 检测是否触发防火墙
      *
      * @param  array  $keys
@@ -133,30 +133,33 @@ class Core extends Config
      */
     private function checkSafe(array $config = [], array $keys = [], array $values = [], string $rule = '')
     {
-        foreach ($keys as $key => $value) {
+        // 检测键名
+        $this->checkItem($config, $rule, $keys);
+        // 检测键值
+        $this->checkItem($config, $rule, $values);
+    }
 
-            if (preg_match($rule, $value, $match)) {
-                $this->handleCall([
-                    'data'    => [
-                        'Uri'   => $this->getFillerUri(),
-                        'Rule'  => $rule,
-                        'Value' => $value,
-                        'Match' => $match,
-                    ],
-                    'config'  => $config,
-                    'message' => '检测到非法字符，已被系统拦截！',
-                ]);
+    /**
+     * 执行检测
+     * @param array        $config 检测配置
+     * @param string       $rule   检测正则
+     * @param string|array $data   检测内容
+     * @return void
+     */
+    public function checkItem($config = [], $rule = '', $data)
+    {
+        if (is_array($data)) {
+            foreach ($data as $key => $value) {
+                $this->checkItem($config, $rule, $value);
             }
-        }
-
-        foreach ($values as $key2 => $value2) {
-            if (preg_match($rule, $value2, $match2)) {
+        } else {
+            if (preg_match($rule, $data, $match)) {
                 $this->handleCall([
                     'data'    => [
                         'Uri'   => $this->getFillerUri(),
                         'Rule'  => $rule,
-                        'Value' => $value2,
-                        'Match' => $match2,
+                        'Value' => $data,
+                        'Match' => $match,
                     ],
                     'config'  => $config,
                     'message' => '检测到非法字符，已被系统拦截！',
@@ -219,6 +222,7 @@ class Core extends Config
         if (!$request_uri) {
             return false;
         }
+
         $rules = is_array($rules) ? $rules : [$rules];
         foreach ($rules as $key => $ruleValue) {
             if (preg_match('/' . $ruleValue . '/', $request_uri)) {
